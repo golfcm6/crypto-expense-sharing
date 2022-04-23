@@ -2,18 +2,18 @@ pragma solidity >=0.4.21 <0.7.0;
 
 import "truffle/Assert.sol";
 import "truffle/DeployedAddresses.sol";
-import "../contracts/SimpleStorage.sol";
+import "../contracts/Splitting.sol";
 
 contract TestSimpleStorage {
 
   function testItStoresAValue() public {
-    SimpleStorage simpleStorage = SimpleStorage(DeployedAddresses.SimpleStorage());
+    Splitting splitting = Splitting(DeployedAddresses.Splitting());
 
-    simpleStorage.set(89);
+    splitting.set(89);
 
     uint expected = 89;
 
-    Assert.equal(simpleStorage.get(), expected, "It should store the value 89.");
+    Assert.equal(splitting.get(), expected, "It should store the value 89.");
   }
 
 }

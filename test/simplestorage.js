@@ -1,14 +1,14 @@
-const SimpleStorage = artifacts.require("./SimpleStorage.sol");
+const Splitting = artifacts.require("./Splitting.sol");
 
-contract("SimpleStorage", accounts => {
+contract("Splitting", accounts => {
   it("...should store the value 89.", async () => {
-    const simpleStorageInstance = await SimpleStorage.deployed();
+    const splittingInstance = await Splitting.deployed();
 
     // Set value of 89
-    await simpleStorageInstance.set(89, { from: accounts[0] });
+    await splittingInstance.set(89, { from: accounts[0] });
 
     // Get stored value
-    const storedData = await simpleStorageInstance.get.call();
+    const storedData = await splittingInstance.get.call();
 
     assert.equal(storedData, 89, "The value 89 was not stored.");
   });
