@@ -1,5 +1,5 @@
 import React, { Component } from "react";
-import SimpleStorageContract from "./contracts/SimpleStorage.json";
+import SplittingContract from "./contracts/Splitting.json";
 import getWeb3 from "./getWeb3";
 
 import "./App.css";
@@ -14,12 +14,13 @@ class App extends Component {
 
       // Use web3 to get the user's accounts.
       const accounts = await web3.eth.getAccounts();
+      console.log(accounts);
 
       // Get the contract instance.
       const networkId = await web3.eth.net.getId();
-      const deployedNetwork = SimpleStorageContract.networks[networkId];
+      const deployedNetwork = SplittingContract.networks[networkId];
       const instance = new web3.eth.Contract(
-        SimpleStorageContract.abi,
+        SplittingContract.abi,
         deployedNetwork && deployedNetwork.address,
       );
 
