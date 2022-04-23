@@ -1,12 +1,19 @@
 import React, { Component } from "react";
 import SplittingContract from "./contracts/Splitting.json";
 import getWeb3 from "./getWeb3";
+import Web3 from "web3";
 
 import "./App.css";
 
 class App extends Component {
-  state = { storageValue: 0, web3: null, accounts: null, contract: null };
-
+  
+  constructor() {
+    super();
+    this.state = { storageValue: 0, web3: null, accounts: null, contract: null, increment: 10};
+    this.makePayment = this.makePayment.bind(this);
+    this.handleSubmit = this.handleSubmit.bind(this);
+  }
+  
   componentDidMount = async () => {
     try {
       // Get network provider and web3 instance.
@@ -23,7 +30,7 @@ class App extends Component {
         SplittingContract.abi,
         deployedNetwork && deployedNetwork.address,
       );
-
+      alert("Contract found!");
       // Set web3, accounts, and contract to the state, and then proceed with an
       // example of interacting with the contract's methods.
       this.setState({ web3, accounts, contract: instance }, this.runExample);
@@ -36,17 +43,31 @@ class App extends Component {
     }
   };
 
+  async makePayment () {
+    await this.state.contract.methods.sendTransaction({ from: this.state.accounts[0], value: 20 })
+  }
+
+  async makeGroup(id, senders, sendVals, receivers, recVals) {
+
+    await this.state.contract.methods.createGroup(id, senders, sendVals, receivers, recVals).send({from: this.state.accounts[0] });
+    this.setState({ increment: (this.state.increment + 1) });
+    console.log(this.state.increment);
+    alert("group created");
+    console.log("groupmade");
+  }
+
+   handleSubmit  (event) { 
+    event.preventDefault();
+    this.makeGroup([20], [this.state.accounts[0]], [50], [this.state.accounts[0]], [25]);
+  };
+
   runExample = async () => {
     const { accounts, contract } = this.state;
 
     // Stores a given value, 5 by default.
-    await contract.methods.set(5).send({ from: accounts[0] });
-
     // Get the value from the contract to prove it worked.
-    const response = await contract.methods.get().call();
-
     // Update state with the result.
-    this.setState({ storageValue: response });
+    this.setState({ storageValue: 69 });
   };
 
   render() {
@@ -65,7 +86,8 @@ class App extends Component {
         <p>
           Try changing the value stored on <strong>line 42</strong> of App.js.
         </p>
-        <div>The stored value is: {this.state.storageValue}</div>
+        <button onClick={this.handleSubmit}></button>
+        <div>The stored value is: {this.state.accounts[0]}</div>
       </div>
     );
   }
