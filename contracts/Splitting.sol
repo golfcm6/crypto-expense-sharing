@@ -1,125 +1,171 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.5.0;
 
-// Smart Contract for Distro
+// Smart Contract for Distro - split crypto payments with friends
+
+// Design Overview
+// - Contract holds Groups (structs with addresses + final amounts due/owed)
+// - Philosophy is that people "approve" the proposed fund distribution that
+//   they were shown on frontend by sending funds (signing). This happens
+//   through senders() function.
+// - Ability for any 1 address to cancel whole distribution process; money is
+//   locked in contract (not given to people owed funds) until all group members
+//   have signed/sent funds).
+
 contract Splitting {
-  // high level: contract stores array of groups
-  // each group is a list of tuples/mappings: address, amount owed/to be paid
-  // contract is initialized with this list (can't get around resizing array), we remove groups as expiry hits
-  address public owner;
-  
+  address payable public owner;
   
   struct Group {
-    // this assumes correct information fed in by the frontend!
+    // arrays of addresses 
     address payable [] sendAd;
     address payable [] recAd;
-    //map from sender's address to the amount they owe
+    // map from sender's address to the amount they owe
     mapping(address => uint) sendMap;
-    //map from the receiver's address to the amount they are due to receive
+    // map from the receiver's address to the amount they are due to receive
     mapping(address => uint) receiveMap;
-    //map from address to bool saying if thi address is in the group or not
+    // map from address to bool saying if thi address is in the group or not
     mapping(address => bool) isInGroup;
-    // refers to index of this.group in groups array
+    // refers to index of this group in groupExists map
     uint groupID;
+    // original invoices, used for cancel fn transaction rollbacks
+    uint [] originalAmounts;
   }
 
-  //map telling you that given a uint for an id number, whether or not a group with that id number exists
+  // map telling you that given a groupID, whether or not a group with that id number exists
   mapping (uint => bool) groupExists;
-  //map that given an id number, will give you the Group instance matching it
+  // map that given an id number, will give you the Group instance matching it
   mapping (uint => Group) getGroup;
   Group[] groups;
 
-  
+  // nothing needs to be done at contract initialization since Groups are added/removed as needed
   constructor() public {
-    owner = msg.sender;
+    owner = payable(msg.sender);
   }
   
-function createGroup(uint groupID, address payable [] memory sendAdr, uint [] memory sendAmo, address payable [] memory recAdr, uint [] memory recAmo) public{
-  // set this as a valid group ID
-  assert(!groupExists[groupID]);
-  groupExists[groupID] = true;
-  
-  // add the proposed group to our group mapping
-  getGroup[groupID] = Group({
-    sendAd: sendAdr,
-    recAd: recAdr,
-    groupID: groupID
-    // initializing group amount mappings and making input addresses associated with this group
-  });
+  // Function to create a group when given a final list of addresses and amounts, tagged as 
+  // senders (who we need money from) and receivers (who needs money sent to them).
+  function createGroup(uint group_id, address payable [] memory sendAdr, uint [] memory sendAmo, address payable [] memory recAdr, uint [] memory recAmo) public{
+    // group_id must not currently be in use
+    require(!groupExists[group_id], "group ID taken, choose different ID");
+    groupExists[group_id] = true;
+    
+    // add the proposed group to our group mapping
+    getGroup[group_id] = Group({
+      sendAd: sendAdr,
+      recAd: recAdr,
+      groupID: group_id,
+      originalAmounts = sendAmo
+    });
+    // set the mappings (isInGroup for all users, sender amounts, and receiver amounts)
+    for (uint i = 0; i < sendAdr.length; i++){
+        getGroup[group_id].isInGroup[sendAdr[i]] = true;
+        getGroup[group_id].sendMap[sendAdr[i]] = sendAmo[i];
+      }
 
-
-
-  for (uint i = 0; i < sendAdr.length; i++){
-      getGroup[groupID].isInGroup[sendAdr[i]] = true;
-      getGroup[groupID].sendMap[sendAdr[i]] = sendAmo[i];
-    }
-
-  for (uint i = 0; i < recAdr.length; i++){
-      getGroup[groupID].isInGroup[recAdr[i]] = true;
-      getGroup[groupID].receiveMap[recAdr[i]] = recAmo[i];
-    }
-
-}
-
-  // function for sending out metamask requests for payment/addresses to connect to contract
-    // happens after someone clicks connect to wallet
-  function sendRequests(bool isSender, uint amount) public {
-    if (isSender == true) {
-      // metamask request for amount to msg.sender
-    }
-    else {
-      // metamask request for 0 to msg.sender, they do this to approve the setup and aren't charged anything
-    }
+    for (uint i = 0; i < recAdr.length; i++){
+        getGroup[group_id].isInGroup[recAdr[i]] = true;
+        getGroup[group_id].receiveMap[recAdr[i]] = recAmo[i];
+      }
   }
 
-// function to update amounts owed by senders. Returns 0 if paid in full or too much since don't owe any more
-// (if too much, calls function to return extra money to user), otherwise returns the amount they still have to pay
-function senders (uint group_id) public payable returns (uint) {
-  // make sure the specific group exists
-  assert(groupExists[group_id] == true);
-  Group storage currGroup = getGroup[group_id];
-  // make sure this address exists in the group
-  assert(currGroup.isInGroup[msg.sender] == true);
+  // // function for sending out metamask requests for payment/addresses to connect to contract
+  //   // happens after someone clicks connect to wallet
+  // function sendRequests(bool isSender, uint amount) public {
+  //   if (isSender == true) {
+  //     // metamask request for amount to msg.sender
+  //   }
+  //   else {
+  //     // metamask request for 0 to msg.sender, they do this to approve the setup and aren't charged anything
+  //   }
+  // }
 
-  uint newBalance = currGroup.sendMap[msg.sender] - msg.value;
-  // cases are someone still owing money, having paid exactly what they owed, and paying too much
-    currGroup.sendMap[msg.sender] = newBalance;
-    return(newBalance);
+  // Function to update amounts owed by senders. Specific amount charged determined by frontend. Returns amount still due.
+  function senders (uint group_id) public payable returns (uint) {
+    // make sure the input group exists
+    require(groupExists[group_id]], "group ID does not exist");
+    Group storage currGroup = getGroup[group_id];
+    // make sure the sender is in the group
+    require(currGroup.isInGroup[msg.sender], "sending address is not in this group");
 
-}
+    // update balance due based on payment amount
+    uint newBalance = currGroup.sendMap[msg.sender] - msg.value;
+      currGroup.sendMap[msg.sender] = newBalance;
+      // will be 0 only if fully paid
+      return(newBalance);
+  }
 
-
-// function makePayments (address sender, address receiver, uint amount){
-  // called when frontend sees "green checks" from everyone, we know everyone has paid and we're good to go with receivers
-  function recipients(uint group_id) public {
-      assert(groupExists[group_id] == true);
+  // Function to send funds to recipients and close the group. Called when frontend sees 
+  // "green checks" from everyone (all senders have paid full amount).
+  function recipients(uint group_id) public payable {
+    // make sure the input group exists
+    require(groupExists[group_id]], "group ID does not exist");
     Group storage currGroup = getGroup[group_id];
 
-    // iterate through all receive requests and do .transfer to send them money
+    // iterate through all receive requests and send them needed amounts. Only happens post-senders
+    // so we know that enough money is locked in the contract to send this. 
     for (uint i = 0; i < currGroup.recAd.length; i++) {
       uint amountOwed = currGroup.receiveMap[currGroup.recAd[i]];
+      // apparently, best practice is to use .call instead of transfer
+      (bool success, ) = msg.sender.call{value:amountOwed}("");
+      require(success, "Transfer failed.");
+
+      // msg.sender.transfer(amountOwed);
       currGroup.receiveMap[currGroup.recAd[i]] = 0;
-      msg.sender.transfer(amountOwed);
     }
 
-    // also handles cleanup, we say the group doesn't exist so this id can be used in the future
+    // cleanup: group no longer exists (no mapping for it)
     groupExists[group_id] = false;
   }
 
-  function readSeller (uint group_id) public view returns (uint){
-    return getGroup[group_id].sendMap[getGroup[group_id].sendAd[0]]; 
-        
-        // console.log(groups[i].recAd);
-        // groups[i].sendMap("0xda4c8439A9680dF645c72422a00E109e5b78Bd6C");
-    
+  // function to revert all transactions, called by frontend when expiry date is hit OR someone has rejected terms
+  // just need the original terms for sender amounts, since those may need to be reverted
+  function cancel(uint group_id) public payable {
+    // make sure the input group exists
+    require(groupExists[group_id]], "group ID does not exist");
+    Group storage currGroup = getGroup[group_id];
+
+    for (uint i = 0; i < currGroup.sendAd.length; i++) {
+      uint diff = currGroup.originalAmounts[i] - currGroup.sendMap[currGroup.sendAd[i]];
+      if (diff != 0) {
+        // send money back if they paid anything so far. Contract guaranteed to have this locked since 
+        // receive() not yet called.
+
+        (bool success, ) = currGroup.sendAd[i].call{value:diff}("");
+        require(success, "Transfer failed.");
+
+        // currGroup.sendAd[i].transfer(diff);
+      }
+    }
+
+    // cleanup: we remove the group fully (no longer in our mappings)
+    groupExists[group_id] = false;
   }
-  function readEarner (uint group_id) public view returns (uint){
-    return getGroup[group_id].receiveMap[getGroup[group_id].recAd[0]]; 
-        
-        // console.log(groups[i].recAd);
-        // groups[i].sendMap("0xda4c8439A9680dF645c72422a00E109e5b78Bd6C");
-    
+
+  // for testing
+  function readSeller(uint group_id) public view returns (uint) {
+    return getGroup[group_id].sendMap[getGroup[group_id].sendAd[1]];     
   }
+
+  function readEarner(uint group_id) public view returns (uint) {
+    return getGroup[group_id].receiveMap[getGroup[group_id].recAd[1]];     
+  }
+
+  function public view returns (address) {
+    return address(this).balance;
+  }
+
+//**TO DO**
+// - Look into how recipients() works when contract hasn't received any money
+// - For some reason BBB was totally good on this despite no receive() fn
+// - Could just do the totalAmount counter for our own understanding, but local testing is required to fully see it failing
+// - (point is we don't want to see the receiver() function do anything unless contract has enough money in)
+
+
+//**ORDER OF EVENTS**
+// - frontend calls createGroup()
+// - preceive
+
+
 
 
   // order needs to be someone tries to pay us, receive function goes through, we then do senders function to update internally
