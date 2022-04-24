@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity =0.5.0;
+// import "@nomiclabs/buidler/console.sol";
 
 // Smart Contract for Distro - split crypto payments with friends
 
@@ -39,7 +40,7 @@ contract Splitting {
 
   // nothing needs to be done at contract initialization since Groups are added/removed as needed
   constructor() public {
-    owner = payable(msg.sender);
+    owner =  msg.sender;
   }
   
   // Function to create a group when given a final list of addresses and amounts, tagged as 
@@ -54,7 +55,7 @@ contract Splitting {
       sendAd: sendAdr,
       recAd: recAdr,
       groupID: group_id,
-      originalAmounts = sendAmo
+      originalAmounts: sendAmo
     });
     // set the mappings (isInGroup for all users, sender amounts, and receiver amounts)
     for (uint i = 0; i < sendAdr.length; i++){
@@ -82,7 +83,7 @@ contract Splitting {
   // Function to update amounts owed by senders. Specific amount charged determined by frontend. Returns amount still due.
   function senders (uint group_id) public payable returns (uint) {
     // make sure the input group exists
-    require(groupExists[group_id]], "group ID does not exist");
+    require(groupExists[group_id], "group ID does not exist");
     Group storage currGroup = getGroup[group_id];
     // make sure the sender is in the group
     require(currGroup.isInGroup[msg.sender], "sending address is not in this group");
@@ -94,24 +95,23 @@ contract Splitting {
       return(newBalance);
   }
 
+
   // Function to send funds to recipients and close the group. Called when frontend sees 
   // "green checks" from everyone (all senders have paid full amount).
-  function recipients(uint group_id) public payable {
+  function recipients(uint group_id) public{
     // make sure the input group exists
-    require(groupExists[group_id]], "group ID does not exist");
-    Group storage currGroup = getGroup[group_id];
-
+    require(msg.sender == owner, "caller must be the owner");
+    require(groupExists[group_id], "group ID does not exist");
     // iterate through all receive requests and send them needed amounts. Only happens post-senders
     // so we know that enough money is locked in the contract to send this. 
-    for (uint i = 0; i < currGroup.recAd.length; i++) {
-      uint amountOwed = currGroup.receiveMap[currGroup.recAd[i]];
-      // apparently, best practice is to use .call instead of transfer
-      (bool success, ) = msg.sender.call{value:amountOwed}("");
-      require(success, "Transfer failed.");
+    for (uint i = 0; i < getGroup[group_id].recAd.length; i++) {
+      uint amountOwed = getGroup[group_id].receiveMap[getGroup[group_id].recAd[i]];
 
-      // msg.sender.transfer(amountOwed);
-      currGroup.receiveMap[currGroup.recAd[i]] = 0;
+      (getGroup[group_id].recAd[i]).transfer(amountOwed);
+
+      getGroup[group_id].receiveMap[getGroup[group_id].recAd[i]] -= amountOwed;
     }
+  
 
     // cleanup: group no longer exists (no mapping for it)
     groupExists[group_id] = false;
@@ -121,7 +121,7 @@ contract Splitting {
   // just need the original terms for sender amounts, since those may need to be reverted
   function cancel(uint group_id) public payable {
     // make sure the input group exists
-    require(groupExists[group_id]], "group ID does not exist");
+    require(groupExists[group_id], "group ID does not exist");
     Group storage currGroup = getGroup[group_id];
 
     for (uint i = 0; i < currGroup.sendAd.length; i++) {
@@ -130,10 +130,11 @@ contract Splitting {
         // send money back if they paid anything so far. Contract guaranteed to have this locked since 
         // receive() not yet called.
 
-        (bool success, ) = currGroup.sendAd[i].call{value:diff}("");
-        require(success, "Transfer failed.");
+        // (bool success, ) = currGroup.sendAd[i].call{value:diff}("");
+        // require(success, "Transfer failed.");
 
-        // currGroup.sendAd[i].transfer(diff);
+        bool send = currGroup.sendAd[i].send(diff);
+        require(send, "Money was not sent!");
       }
     }
 
@@ -142,15 +143,15 @@ contract Splitting {
   }
 
   // for testing
-  function readSeller(uint group_id) public view returns (uint) {
-    return getGroup[group_id].sendMap[getGroup[group_id].sendAd[1]];     
+  function readSeller(uint group_id, address user) public view returns (uint) {
+    return getGroup[group_id].sendMap[user];     
   }
 
   function readEarner(uint group_id) public view returns (uint) {
     return getGroup[group_id].receiveMap[getGroup[group_id].recAd[1]];     
   }
 
-  function public view returns (address) {
+  function getBalance () public view returns (uint) {
     return address(this).balance;
   }
 
