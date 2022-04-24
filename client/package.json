@@ -6,7 +6,9 @@
     "artifacts": "0.0.1",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
-    "react-scripts": "3.2.0",
+    "react-router-dom": "^6.3.0",
+    "react-scripts": "^3.2.0",
+    "sjcl": "^1.0.8",
     "web3": "^1.6.1"
   },
   "scripts": {
