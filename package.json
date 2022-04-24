@@ -1,5 +1,8 @@
 {
   "dependencies": {
-    "firebase": "^9.6.11"
+    "@truffle/hdwallet-provider": "^2.0.7",
+    "firebase": "^9.6.11",
+    "fs": "0.0.1-security",
+    "mnemonic": "^1.0.1"
   }
 }

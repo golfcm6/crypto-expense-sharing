@@ -44,7 +44,7 @@ contract Splitting {
   }
 
   // needed for daily job to check which groups have had all sellers pay
-  uint [] allGamesSeen;
+  uint [] allGroupsSeen;
   // Function to create a group when given a final list of addresses and amounts, tagged as 
   // senders (who we need money from) and receivers (who needs money sent to them).
   function createGroup(uint group_id, address payable [] memory sendAdr, uint [] memory sendAmo, address payable [] memory recAdr, uint [] memory recAmo) public{
@@ -70,7 +70,11 @@ contract Splitting {
         getGroup[group_id].receiveMap[recAdr[i]] = recAmo[i];
       }
 
-      allGamesSeen.push(group_id);
+      allGroupsSeen.push(group_id);
+  }
+
+  function AllGroups () public view returns (uint [] memory){
+    return allGroupsSeen;
   }
 
   // // function for sending out metamask requests for payment/addresses to connect to contract
@@ -105,7 +109,7 @@ contract Splitting {
   function recipients(uint group_id) public{
     // make sure the input group exists
     require(msg.sender == owner, "caller must be the owner");
-    require(groupExists[group_id], "group ID does not exist");
+    require(!groupExists[group_id], "group ID does not exist");
 
     // only continue with recipients for a group if all senders in group have paid
     for (uint i = 0; i < getGroup[group_id].sendAd.length; i++) {
@@ -181,18 +185,4 @@ contract Splitting {
   // order needs to be someone tries to pay us, receive function goes through, we then do senders function to update internally
   // then frontend tells us everyone has paid, so we call recipients() and are done
 
-
-
-
-
-
-
-  // FIX THIS LATER BBB DIDN'T HAVE ANY OF THIS? FOR JUST RECEIVING MONEY
-  // function () external payable {}
-
-  // // reaction to receiving ETH, simple
-  // event Received(address, uint);
-  // receive() external payable {
-  //     emit Received(msg.sender, msg.value);
-  // }
 }
