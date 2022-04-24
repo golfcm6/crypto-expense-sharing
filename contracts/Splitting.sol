@@ -42,7 +42,9 @@ contract Splitting {
   constructor() public {
     owner =  msg.sender;
   }
-  
+
+  // needed for daily job to check which groups have had all sellers pay
+  uint [] allGamesSeen;
   // Function to create a group when given a final list of addresses and amounts, tagged as 
   // senders (who we need money from) and receivers (who needs money sent to them).
   function createGroup(uint group_id, address payable [] memory sendAdr, uint [] memory sendAmo, address payable [] memory recAdr, uint [] memory recAmo) public{
@@ -67,6 +69,8 @@ contract Splitting {
         getGroup[group_id].isInGroup[recAdr[i]] = true;
         getGroup[group_id].receiveMap[recAdr[i]] = recAmo[i];
       }
+
+      allGamesSeen.push(group_id);
   }
 
   // // function for sending out metamask requests for payment/addresses to connect to contract
@@ -102,6 +106,11 @@ contract Splitting {
     // make sure the input group exists
     require(msg.sender == owner, "caller must be the owner");
     require(groupExists[group_id], "group ID does not exist");
+
+    // only continue with recipients for a group if all senders in group have paid
+    for (uint i = 0; i < getGroup[group_id].sendAd.length; i++) {
+      require(getGroup[group_id].sendMap[getGroup[group_id].sendAd[i]] == 0, "not all senders have paid");
+    }
     // iterate through all receive requests and send them needed amounts. Only happens post-senders
     // so we know that enough money is locked in the contract to send this. 
     for (uint i = 0; i < getGroup[group_id].recAd.length; i++) {
